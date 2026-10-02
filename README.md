@@ -12,6 +12,7 @@
 
 - 逐段中英对照，保留章节、来源页码、公式、图表和参考文献。
 - 自包含 HTML 阅读版与可编辑 Markdown 对照文本。
+- 正文、表格及编号公式使用标准数学排版，正确显示上下标、希腊字母、分式、重音、矩阵和矢量字体；保留原图与提取文本供核对。
 - 在任一侧选中一句中的文字，只高亮另一侧对应句子；跨句选择支持多个对应句子。
 - 通过经过核对的句子或必要分句映射处理拆句、合句和语序变化，不按句号数量猜测。
 - 目录、检索、语言切换及手机布局。
@@ -38,6 +39,7 @@ git clone https://github.com/Chenghao1020/ch-paper-bilingual-translation.git ~/.
 优先使用 Codex 工作区提供的运行时；脚本不固定依赖本机路径。
 
 - Python：`pypdf`、`Pillow`；开发用合成 PDF 测试另外使用 `reportlab`。
+- 数学转换器 latex2mathml 3.78.0 已随技能附带，无需额外安装。AI 按原文核对转写，程序生成原生 MathML；HTML 可离线阅读，Markdown 公式需支持数学排版的阅读器。第三方许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 - Poppler：需要页面渲染或裁切时使用 `pdftoppm`。
 - 阅读器检查：Node.js、Playwright 包，以及可用的 Chromium、Chrome 或 Edge 浏览器程序。
 
@@ -62,6 +64,6 @@ python -B scripts/smoke_test.py --workspace <fresh-test-workspace> --poppler-bin
 node scripts/qa_reader.cjs --workspace <workspace> --html <reader.html> --out <qa-output> --playwright <playwright-package> --browser <browser-executable>
 ```
 
-开发检查覆盖构建、路径保护、草稿、缺失/损坏句子映射、双向句子高亮、同段换句、跨句选择、语序变化、一对多对应、鼠标拖选、键盘扩选和手机布局。生成截图仍需进行视觉检查。
+开发检查覆盖构建、路径保护、草稿、缺失/损坏句子映射、数学转换及失效保护、双向句子高亮、公式内选择、同段换句、跨句选择、语序变化、一对多对应、鼠标拖选、键盘扩选和手机布局。生成截图仍需进行视觉检查。
 
 本仓库仅包含通用技能及说明；论文原文和具体论文的译文数据由各自工作区管理。

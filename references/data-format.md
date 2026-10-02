@@ -19,7 +19,7 @@
   "output_prefix": "论文短名_论文中英对照",
   "expected_ids": ["paper-title", "abstract-heading", "abstract-p1", "eq-1", "table-1", "ref-a"],
   "glossary": [{"source": "reference point", "target": "参考点"}],
-  "editorial_notes": ["跨页段落已合并。公式保留原图，译者补充说明与原文分开。"],
+  "editorial_notes": ["跨页段落已合并。公式使用数学排版并保留原图核对；译者补充说明与原文分开。"],
   "review": {
     "reading_order": false,
     "translation_complete": false,
@@ -76,6 +76,8 @@ paragraph 和 figure 必须提供已核对的 `alignment`。其 source/target �
 {
   "id": "eq-1", "kind": "equation", "pages": [2],
   "source": "x = a + b    (1)", "target": "",
+  "equations": [{"latex": "x=a+b", "label": "(1)"}],
+  "math_reviewed": true,
   "visuals": [{"page": 2, "bbox": [0.12, 0.30, 0.88, 0.37]}],
   "translator_note": "可选的辅助说明，明确不属于论文原文。"
 }
@@ -84,6 +86,30 @@ paragraph 和 figure 必须提供已核对的 `alignment`。其 source/target �
 `bbox` 为 `[左, 上, 右, 下]`，使用渲染页面宽高的 0–1 比例，原点在左上角。页面不同尺寸、分辨率或旋转时，不得复制旧论文坐标。公式的 target 可为空，因为数学式通常无需译成另一语言；不要将解释文字冒充原文。
 
 figure 使用相同 visuals 结构，source 与 target 分别为原图注与译文，可在译文中补充图内标签的对照。一个条目可有多个裁切区域。
+
+### 数学排版数据
+
+每个 equation 条目必须提供经过原页核对的 `equations` 非空数组以及 `math_reviewed: true`。每行包含不带外层美元符号的 `latex` 和可选的 `label`。多行可分多个元素，或使用 `\\begin{aligned}…\\end{aligned}`、`array`、`matrix`；编号按原文填写，不要重复写进 latex。原始 `source`、裁切图仍保留用于核对；默认阅读显示排版后的公式。
+
+正文、图注或表格单元格中的公式用明确注释转换；不修改原始 `source`、`target` 或 `alignment`：
+
+```json
+{
+  "source": "The delay is τ_m^β.",
+  "target": "时延为 τ_m^β。",
+  "math": {
+    "reviewed": true,
+    "source": [{"text": "τ_m^β", "latex": "\\tau_m^\\beta"}],
+    "target": [{"text": "τ_m^β", "latex": "\\tau_m^\\beta"}]
+  }
+}
+```
+
+`text` 是该侧原始字符串中完整、精确匹配的数学片段，所有出现位置使用同一注释；有歧义时用更长的上下文消除歧义。每个片段须完整落在一个句子或分句单元内，不能跨越 alignment 边界。不同侧可使用不同片段；一个侧内不重复列出同一 text。有重叠时优先匹配长片段。不要给 URL、文件名中的下划线添加数学注释。
+
+例如 `f_N^β/f_D^β` 对应 `\\frac{f_{\\mathrm N}^\\beta}{f_{\\mathrm D}^\\beta}`；以 `\\mathbf`、`\\mathcal`、`\\mathbb` 表示原文中的矢量、集合和数域，不能只凭变量名猜字体。JSON 中反斜杠必须写成 `\\`。转换器支持常用数学命令；不支持的宏需展开为标准记法，并对照原文核对。禁止外部文件命令、HTML 和自定义宏；无法转换时构建会报告具体条目，不静默退回未经排版的文本。
+
+HTML 使用随技能附带的 latex2mathml 生成原生 MathML，离线阅读不加载网络资源。Markdown 输出 `$…$` 与 `$$…$$`，需要支持数学公式的 Markdown 阅读器才能显示排版结果。公式内部依然可选择文字并联动句子高亮；独立公式没有另一侧句子时无需联动。
 
 已有图像可用 `{"page": 2, "file": "assets/source-image.png"}`。该路径相对任务目录，必须位于其中；先复制参考目录的图片。最终 HTML 嵌入生成图片，Markdown 引用工作区内图片。
 

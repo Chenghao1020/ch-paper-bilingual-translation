@@ -73,7 +73,9 @@ def main():
          'alignment':{'source':['The measured delay is 3.2 ms [A]. ','The receiver stays synchronized. ','A second mode shares the hardware.'],
                       'target':['接收端保持同步。','测得的时延为 3.2 ms [A]。','第二种模式共享硬件。'],
                       'pairs':[[0,1],[1,0],[2,2]],'reviewed':True}},
-        {'id':'equation-one','kind':'equation','pages':[1],'source':'x = a + b  (1)','target':'','visuals':[{'page':1,'bbox':[0.06,0.325,0.47,0.365]}]},
+        {'id':'equation-one','kind':'equation','pages':[1],'source':'x = a + b  (1)','target':'',
+         'equations':[{'latex':'x=a+b','label':'(1)'}],'math_reviewed':True,
+         'visuals':[{'page':1,'bbox':[0.06,0.325,0.47,0.365]}]},
         {'id':'figure-one','kind':'figure','pages':[1],'source':'Fig. 1. Input and output.','target':'图 1. 输入与输出。','visuals':[{'page':1,'bbox':[0.055,0.585,0.38,0.695]}]},
         {'id':'settings-table','kind':'table','pages':[2],'source':'Table I. Settings.','target':'表 I. 设置。',
          'table':{'headers':[{'source':'Parameter','target':'参数'},{'source':'Value','target':'数值'}],
@@ -89,6 +91,15 @@ def main():
                     'alignment':{'source':['The pool serves two modes and both remain active.'],
                                  'target':['共享池服务两种模式。','两者均保持活动。'],
                                  'pairs':[[0,0],[0,1]],'reviewed':True}})
+    records.append({'id':'math-sentence','kind':'paragraph','pages':[1],
+                    'source':'The delay is τ_m^β. The ratio is a/b.',
+                    'target':'时延为 τ_m^β。比值为 a/b。',
+                    'alignment':{'source':['The delay is τ_m^β. ','The ratio is a/b.'],
+                                 'target':['时延为 τ_m^β。','比值为 a/b。'],
+                                 'pairs':[[0,0],[1,1]],'reviewed':True},
+                    'math':{'reviewed':True,
+                            'source':[{'text':'τ_m^β','latex':r'\tau_m^\beta'},{'text':'a/b','latex':r'\frac{a}{b}'}],
+                            'target':[{'text':'τ_m^β','latex':r'\tau_m^\beta'},{'text':'a/b','latex':r'\frac{a}{b}'}]}})
     manifest['title']['target']='合成示例'
     manifest['expected_ids']=[x['id'] for x in records]
     manifest['glossary']=[{'source':'delay','target':'时延'}]
@@ -106,6 +117,17 @@ def main():
     assert text.count('data:image/png;base64,')==3
     assert '3.2 ms' in text and '[A]' in text and '[B]' in text
     assert 'OpenSat' not in text
+    assert '<msubsup>' in text and '<mfrac>' in text and 'τ' in text and 'β' in text
+    assert '$\\tau_m^\\beta$' in (workspace/'通用技能测试_对照.md').read_text(encoding='utf-8')
+    from math_render import mathml
+    assert '𝐗' in mathml(r'\mathbf X') and '𝒲' in mathml(r'\mathcal W') and 'ℂ' in mathml(r'\mathbb C')
+    # A malformed or unreviewed formula cannot silently publish as plain text.
+    for field,value in [('latex',r'\unsupportedMathCommand{x}'),('latex',r'\input{secret}'),('latex',[]),('text','absent_symbol')]:
+        bad=json.loads(json.dumps(records));bad[-1]['math']['source'][0][field]=value;write_records(bad)
+        run(['check','--job',str(job)],1)
+    bad=json.loads(json.dumps(records));bad[3]['math_reviewed']=False;write_records(bad)
+    run(['build','--job',str(job),'--overwrite'],2)
+    write_records(records)
     run(['build','--job',str(job)],2)  # No silent output overwrite.
     run(['build','--job',str(job),'--overwrite'])
     bad = json.loads(json.dumps(records));bad[2].pop('alignment');write_records(bad)

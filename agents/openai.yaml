@@ -1,4 +1,4 @@
 interface:
   display_name: "ch 论文中英对照翻译"
-  short_description: "复用论文提取、段落翻译、公式图表保留、双栏排版与质量核对流程"
+  short_description: "复用论文提取、双语翻译、数学排版、句子高亮与质量核对流程"
   default_prompt: "使用 $ch-paper-bilingual-translation 翻译这篇论文并生成逐段中英对照文本。"

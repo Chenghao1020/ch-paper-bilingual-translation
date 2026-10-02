@@ -16,6 +16,7 @@ import shutil
 import subprocess
 import sys
 from collections import Counter
+from math_render import math_errors, render_text, markdown_text, render_equations, markdown_equations
 
 SKILL = Path(__file__).resolve().parents[1]
 KINDS = {'title', 'heading', 'paragraph', 'equation', 'figure', 'table', 'reference'}
@@ -225,6 +226,7 @@ def validate(job, manifest, records, draft=False):
         if r.get('kind') == 'heading' and r.get('level') not in (1, 2, 3):
             problems.append(f'{rid}: heading level must be 1, 2, or 3')
         problems.extend(f'{rid}: {error}' for error in alignment_errors(r))
+        problems.extend(f'{rid}: {error}' for error in math_errors(r))
         for asset in r.get('visuals', []):
             page = asset.get('page')
             if type(page) is not int or not 1 <= page <= count or page not in pages:
@@ -257,6 +259,8 @@ def validate(job, manifest, records, draft=False):
                     problems.append(f'{rid}: each table cell needs source and target text (numbers can be repeated)')
                 elif cell.get('alignment') is not None:
                     problems.extend(f'{rid} table cell: {error}' for error in alignment_errors(cell))
+                if isinstance(cell, dict):
+                    problems.extend(f'{rid} table cell: {error}' for error in math_errors(cell))
         # Numbers and citation tokens are indicators, not proof of translation quality.
         if r.get('kind') == 'paragraph' and r.get('target'):
             for token in set(re.findall(r'\b\d+(?:\.\d+)?(?:%|\b)', r['source'])):
@@ -330,14 +334,14 @@ def aligned_text(record, side, key):
     alignment = record.get('alignment')
     if not alignment:
         if record.get('kind') in ('paragraph', 'figure'):
-            return safe_text(record[side])  # Drafts never fall back to paragraph highlighting.
+            return render_text(record[side], record, side)  # Drafts never fall back to paragraph highlighting.
         alignment = {'source': [record['source']], 'target': [record['target']], 'pairs': [[0, 0]]}
     other = 'target' if side == 'source' else 'source'
     column = 0 if side == 'source' else 1
     parts = []
     for index, text in enumerate(alignment[side]):
         peers = ' '.join(f'{key}-{other}-{pair[1-column]}' for pair in alignment['pairs'] if pair[column] == index)
-        parts.append(f'<span class="aligned-sentence" data-unit="{key}-{side}-{index}" data-peers="{peers}">{safe_text(text)}</span>')
+        parts.append(f'<span class="aligned-sentence" data-unit="{key}-{side}-{index}" data-peers="{peers}">{render_text(text, record, side)}</span>')
     return ''.join(parts)
 
 
@@ -376,14 +380,14 @@ def build(args):
         return f'<span class="source-text">{aligned_text(cell, "source", key)}</span><span class="target-text">{aligned_text(cell, "target", key)}</span>'
     def md_table(table):
         def cell(c):
-            return (md_text(c['source']) + ' / ' + md_text(c['target'])).replace('|', '\\|').replace('\n', ' ')
+            return (markdown_text(c['source'], c, 'source') + ' / ' + markdown_text(c['target'], c, 'target')).replace('|', '\\|').replace('\n', ' ')
         rows = ['| ' + ' | '.join(cell(c) for c in table['headers']) + ' |',
                 '| ' + ' | '.join('---' for _ in table['headers']) + ' |']
         rows += ['| ' + ' | '.join(cell(c) for c in row) + ' |' for row in table['rows']]
         return '\n'.join(rows)
     parts, toc, md = [], [], [f'# {md_text(title)}\n']
     counts = report['counts']
-    intro = f'依据 {manifest["page_count"]} 页原文，按条目提供原文与译文对照，包含 {len(records)} 个条目。公式与插图保留所附原文图像。选中任一侧句子中的文字，另一侧对应句子会高亮；取消选择后高亮消失。'
+    intro = f'依据 {manifest["page_count"]} 页原文，按条目提供原文与译文对照，包含 {len(records)} 个条目。公式使用数学排版，原文图像可展开核对。选中任一侧句子中的文字，另一侧对应句子会高亮；取消选择后高亮消失。'
     md.append(intro + '\n')
     if args.draft:
         md.append('**草稿：尚有未完成译文或未核对内容，不能作为完整翻译交付。**\n')
@@ -401,16 +405,19 @@ def build(args):
             parts.append(f'<section class="block heading" id="{rid}">{label}{markup}</section>')
             if kind == 'heading':
                 toc.append(f'<a class="{"sub" if level>2 else ""}" href="#{rid}">{esc(target or source)}</a>')
-            md.append('#'*level + ' ' + md_text(source) + '\n\n' + md_text(target) + '\n')
+            md.append('#'*level + ' ' + markdown_text(source, record, 'source') + '\n\n' + markdown_text(target, record, 'target') + '\n')
         else:
             cls = {'equation':'formula', 'figure':'figure', 'table':'table-block', 'reference':'ref'}.get(kind, 'paragraph')
             body = label
-            if kind != 'table':
+            if kind not in ('table', 'equation'):
                 body += ''.join(graphic(p, rid) for p in visuals)
             if kind == 'equation':
+                body += render_equations(record)
                 if target:
-                    body += f'<div class="target-text">{safe_text(target)}</div>'
-                body += f'<details><summary>公式文本</summary><pre>{esc(source)}</pre></details>'
+                    body += f'<div class="target-text">{render_text(target, record, "target")}</div>'
+                if visuals:
+                    body += '<details><summary>核对原文公式图像</summary>' + ''.join(graphic(p,rid) for p in visuals) + '</details>'
+                body += f'<details><summary>提取原始文本（核对用）</summary><pre>{esc(source)}</pre></details>'
             else:
                 body += pair(record, 'caption' if kind in ('figure', 'table') else '')
             if kind == 'table':
@@ -423,10 +430,10 @@ def build(args):
                 rel = file.relative_to(workspace).as_posix()
                 md.append(f'![{rid} 原文图像](<{rel}>)\n')
             if kind == 'equation':
-                md += ['**公式文本**\n\n' + md_text(source) + '\n', md_text(target) + '\n']
+                md += [markdown_equations(record), markdown_text(target, record, 'target') + '\n']
             else:
-                md += [f'**{source_lang["label"]}（原文第 {pages} 页）**\n\n{md_text(source)}\n',
-                       f'**{target_lang["label"]}**\n\n{md_text(target or "[译文待完成]")}\n']
+                md += [f'**{source_lang["label"]}（原文第 {pages} 页）**\n\n{markdown_text(source, record, "source")}\n',
+                       f'**{target_lang["label"]}**\n\n{markdown_text(target or "[译文待完成]", record, "target")}\n']
             if kind == 'table':
                 md.append(md_table(record['table']) + '\n')
             if record.get('translator_note'):

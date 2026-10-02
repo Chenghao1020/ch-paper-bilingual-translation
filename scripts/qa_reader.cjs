@@ -41,6 +41,15 @@ function inside(root,value){
    overflowingCells:[...document.querySelectorAll('.cell,td,th')].filter(x=>x.scrollWidth>x.clientWidth+2).map(x=>x.textContent.slice(0,70)),
    brokenTocLinks:[...document.querySelectorAll('nav a')].filter(x=>!document.getElementById(x.hash.slice(1))).length
   }));
+  report.math=await page.evaluate(()=>({
+   inline:document.querySelectorAll('.math-inline math').length,
+   display:document.querySelectorAll('.typeset-equations math').length,
+   scripts:document.querySelectorAll('msub,msup,msubsup').length,
+   fractions:document.querySelectorAll('mfrac').length,
+   missingEquations:[...document.querySelectorAll('.formula')].filter(x=>!x.querySelector('.typeset-equations math')).length,
+   invalidSymbols:[...document.querySelectorAll('math')].filter(x=>/\\[A-Za-z]+|�/.test(x.textContent)).length,
+   zeroSize:[...document.querySelectorAll('.typeset-equations math,.math-inline math')].filter(x=>x.getBoundingClientRect().width===0||x.getBoundingClientRect().height===0).length
+  }));
   await page.screenshot({path:path.join(out,'desktop.png')});
   // Capture each visual/table for the agent to inspect; no paper-specific IDs.
   const sections=page.locator('section').filter({has:page.locator('img,table')});
@@ -60,7 +69,7 @@ function inside(root,value){
   // and clearing a selection, table cells, and spans across multiple records.
   report.selectionHighlight=await page.evaluate(async()=>{
    const result={},selection=getSelection();
-   const settle=()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+   const settle=()=>new Promise(resolve=>setTimeout(()=>requestAnimationFrame(()=>requestAnimationFrame(resolve)),20));
    const count=()=>document.querySelectorAll('.paired-highlight').length;
    const pairs=[...document.querySelectorAll('article .columns')].filter(p=>p.querySelector(':scope > .source-text')&&p.querySelector(':scope > .target-text'));
    if(!pairs.length)return {passed:false,reason:'No paired text to verify'};
@@ -98,6 +107,11 @@ function inside(root,value){
    select(source);await settle();selection.removeAllRanges();await settle();result.deselectClears=count()===0;
    select(source);await settle();document.querySelector('[data-mode="target"]').click();await settle();result.singleLanguageClears=count()===0;
    document.querySelector('[data-mode="both"]').click();selection.removeAllRanges();await settle();
+   const math=document.querySelector('article .source-text .aligned-sentence math mi');
+   if(math){
+    select(math);await settle();const unit=math.closest('.aligned-sentence');
+    result.selectionInsideMath=unit.dataset.peers.split(' ').filter(Boolean).every(key=>document.querySelector('[data-unit="'+key+'"]').classList.contains('paired-highlight'))&&count()===unit.dataset.peers.split(' ').filter(Boolean).length;
+   }
    select(source);await settle();const search=document.getElementById('search');search.value='__reader_qa_no_match_8d28__';search.dispatchEvent(new Event('input'));
    await settle();result.filteredClears=count()===0;search.value='';search.dispatchEvent(new Event('input'));selection.removeAllRanges();await settle();
    result.passed=Object.values(result).every(value=>value===true);return result;
@@ -156,7 +170,7 @@ function inside(root,value){
   });
   report.errors=errors;
  }finally{await context.close();}
- report.passed=!report.horizontalOverflow&&!report.mobileHorizontalOverflow&&!report.overflowingCells.length&&!report.brokenTocLinks&&!errors.length&&report.targetMode.incorrectlyVisible===0&&report.sourceMode.incorrectlyVisible===0&&report.searchVisible!==0&&report.selectionHighlight.passed&&report.mobileSelectionHighlight;
+ report.passed=!report.horizontalOverflow&&!report.mobileHorizontalOverflow&&!report.overflowingCells.length&&!report.brokenTocLinks&&!errors.length&&!report.math.missingEquations&&!report.math.invalidSymbols&&!report.math.zeroSize&&report.targetMode.incorrectlyVisible===0&&report.sourceMode.incorrectlyVisible===0&&report.searchVisible!==0&&report.selectionHighlight.passed&&report.mobileSelectionHighlight;
  fs.writeFileSync(path.join(out,'reader_audit.json'),JSON.stringify(report,null,2));
  console.log(JSON.stringify(report,null,2));if(!report.passed)process.exitCode=1;
 })().catch(e=>{console.error(e.message);process.exitCode=1;});
